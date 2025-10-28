@@ -1,0 +1,15 @@
+services:
+  - type: static
+    name: fedf-frontend
+    rootDir: .
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    autoDeploy: true
+
+  - type: web
+    name: fedf-backend
+    runtime: node
+    rootDir: backend
+    buildCommand: npm ci
+    startCommand: npm start
+    autoDeploy: true
