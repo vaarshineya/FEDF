@@ -3,7 +3,7 @@ services:
     name: fedf-frontend
     rootDir: .
     buildCommand: npm ci && npm run build
-    staticPublishPath: dist
+    staticPublishPath: project/dist
     autoDeploy: true
 
   - type: web
