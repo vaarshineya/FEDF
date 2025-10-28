@@ -1,5 +1,5 @@
 services:
-  - type: static
+  - type: static_site
     name: fedf-frontend
     rootDir: .
     buildCommand: npm ci && npm run build
