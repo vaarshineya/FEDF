@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Calendar, Clock, Video, ArrowLeft, CreditCard } from 'lucide-react';
+import { useAuth } from '../../contexts/AuthContext';
+import { apiService } from '../../services/api.service';
 
 interface Doctor {
   id: string;
@@ -20,6 +22,19 @@ export const AppointmentBooking: React.FC<AppointmentBookingProps> = ({ doctor, 
   const [appointmentType, setAppointmentType] = useState('video');
   const [notes, setNotes] = useState('');
   const [isBooking, setIsBooking] = useState(false);
+  const { user } = useAuth();
+  const isAlreadyMapped = useMemo(() => {
+    try {
+      const key = 'doctorPatients';
+      const raw = localStorage.getItem(key);
+      if (!raw || !user?.id) return false;
+      const store: Record<string, Array<{ id: string; bookedAt?: string }>> = JSON.parse(raw);
+      const byDoctorName = store[doctor.name] || [];
+      return byDoctorName.some(p => p.id === user.id);
+    } catch {
+      return false;
+    }
+  }, [doctor.name, user?.id]);
 
   // Mock available dates (next 7 days)
   const availableDates = Array.from({ length: 7 }, (_, i) => {
@@ -51,6 +66,33 @@ export const AppointmentBooking: React.FC<AppointmentBookingProps> = ({ doctor, 
 
     // Simulate Stripe payment integration
     alert('Booking successful! In a real app, this would integrate with Stripe for payment processing.');
+    
+    const patientEntry = {
+      id: user?.id || Math.random().toString(36).slice(2),
+      name: user?.name || 'Patient',
+      bookedAt: `${selectedDate} ${selectedTime}`,
+      notes: notes || undefined,
+    };
+
+    // Try API first, fallback to localStorage
+    try {
+      await apiService.mapPatientToDoctor(doctor.id, patientEntry);
+    } catch (apiErr) {
+      try {
+        const key = 'doctorPatients';
+        const raw = localStorage.getItem(key);
+        const store: Record<string, Array<{ id: string; name: string; bookedAt: string }>> = raw ? JSON.parse(raw) : {};
+        const doctorKey = doctor.name; // using doctor name to match DoctorDashboard user.name
+        const existing = store[doctorKey] || [];
+        const already = existing.find(p => p.id === patientEntry.id && p.bookedAt === patientEntry.bookedAt);
+        if (!already) {
+          store[doctorKey] = [patientEntry, ...existing];
+          localStorage.setItem(key, JSON.stringify(store));
+        }
+      } catch (e) {
+        console.error('Failed to save doctor-patient mapping (fallback)', e);
+      }
+    }
     
     setIsBooking(false);
     onNavigate('appointments');
@@ -88,7 +130,7 @@ export const AppointmentBooking: React.FC<AppointmentBookingProps> = ({ doctor, 
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-gray-600">Consultation Fee:</span>
-                <span className="font-semibold text-gray-900">${doctor.consultationFee}</span>
+                <span className="font-semibold text-gray-900">₹{doctor.consultationFee}</span>
               </div>
               <div className="flex items-center">
                 <Video className="h-4 w-4 text-green-600 mr-2" />
@@ -102,6 +144,11 @@ export const AppointmentBooking: React.FC<AppointmentBookingProps> = ({ doctor, 
         <div className="lg:col-span-2">
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <h2 className="text-xl font-semibold text-gray-900 mb-6">Schedule Your Appointment</h2>
+            {isAlreadyMapped && (
+              <div className="mb-6 p-4 border border-blue-200 bg-blue-50 rounded-lg text-sm text-blue-800">
+                You are already mapped to <span className="font-medium">{doctor.name}</span>. You can proceed to book another slot, or view your appointments.
+              </div>
+            )}
 
             <div className="space-y-6">
               {/* Appointment Type */}
@@ -213,7 +260,7 @@ export const AppointmentBooking: React.FC<AppointmentBookingProps> = ({ doctor, 
                   </div>
                   <div className="flex justify-between items-center text-lg font-semibold border-t pt-3">
                     <span>Total:</span>
-                    <span>${doctor.consultationFee}</span>
+                    <span>₹{doctor.consultationFee}</span>
                   </div>
                 </div>
               )}
@@ -221,7 +268,7 @@ export const AppointmentBooking: React.FC<AppointmentBookingProps> = ({ doctor, 
               {/* Book Button */}
               <button
                 onClick={handleBookAppointment}
-                disabled={!selectedDate || !selectedTime || isBooking}
+                disabled={!selectedDate || !selectedTime || isBooking || isAlreadyMapped}
                 className="w-full flex justify-center items-center px-4 py-3 border border-transparent text-base font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {isBooking ? (
@@ -234,7 +281,7 @@ export const AppointmentBooking: React.FC<AppointmentBookingProps> = ({ doctor, 
                 ) : (
                   <>
                     <CreditCard className="h-5 w-5 mr-2" />
-                    Book & Pay ${doctor.consultationFee}
+                    {isAlreadyMapped ? 'Already Mapped' : `Book & Pay ₹${doctor.consultationFee}`}
                   </>
                 )}
               </button>

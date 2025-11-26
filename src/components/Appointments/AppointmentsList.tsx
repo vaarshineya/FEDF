@@ -178,16 +178,6 @@ export const AppointmentsList: React.FC<AppointmentsListProps> = ({ onNavigate }
               </div>
 
               <div className="ml-6 flex flex-col space-y-2">
-                {appointment.status === 'upcoming' && (
-                  <button
-                    onClick={() => startConsultation(appointment.id)}
-                    className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 transition-colors"
-                  >
-                    <Video className="h-4 w-4 mr-1" />
-                    {user?.role === 'patient' ? 'Join Call' : 'Start Consultation'}
-                  </button>
-                )}
-
                 {appointment.status === 'completed' && appointment.prescription && (
                   <button
                     onClick={() => viewPrescription(appointment.prescription!)}
@@ -195,13 +185,6 @@ export const AppointmentsList: React.FC<AppointmentsListProps> = ({ onNavigate }
                   >
                     <FileText className="h-4 w-4 mr-1" />
                     View Prescription
-                  </button>
-                )}
-
-                {appointment.status === 'upcoming' && (
-                  <button className="inline-flex items-center px-3 py-2 border border-red-300 text-sm font-medium rounded-md text-red-700 bg-white hover:bg-red-50 transition-colors">
-                    <X className="h-4 w-4 mr-1" />
-                    Cancel
                   </button>
                 )}
               </div>

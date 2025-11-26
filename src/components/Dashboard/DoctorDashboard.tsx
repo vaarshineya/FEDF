@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
+import { apiService } from '../../services/api.service';
 import { 
   Calendar, 
   Users, 
@@ -16,6 +17,47 @@ interface DoctorDashboardProps {
 
 export const DoctorDashboard: React.FC<DoctorDashboardProps> = ({ onNavigate }) => {
   const { user } = useAuth();
+  const [mappedPatients, setMappedPatients] = useState<Array<{ id: string; name: string; bookedAt?: string }>>([]);
+
+  useEffect(() => {
+    const load = async () => {
+      // Try backend first if we have a user id
+      if (user?.id) {
+        try {
+          const apiPatients = await apiService.getPatientsForDoctor(user.id);
+          // Ensure shape with optional bookedAt
+          const normalized = (apiPatients || []).map(p => ({ id: p.id, name: p.name, bookedAt: p.bookedAt }));
+          setMappedPatients(normalized);
+          // Sync to localStorage for directory badges
+          try {
+            const key = 'doctorPatients';
+            const raw = localStorage.getItem(key);
+            const store: Record<string, Array<{ id: string; name: string; bookedAt?: string }>> = raw ? JSON.parse(raw) : {};
+            const doctorKey = user?.name || '';
+            if (doctorKey) {
+              store[doctorKey] = normalized;
+              localStorage.setItem(key, JSON.stringify(store));
+            }
+          } catch {}
+          return;
+        } catch (e) {
+          // fall through to local storage
+        }
+      }
+
+      // Fallback to localStorage using doctor name as key (mock/demo mode)
+      try {
+        const key = 'doctorPatients';
+        const raw = localStorage.getItem(key);
+        const store: Record<string, Array<{ id: string; name: string; bookedAt?: string }>> = raw ? JSON.parse(raw) : {};
+        const doctorKey = user?.name || '';
+        setMappedPatients(store[doctorKey] || []);
+      } catch (e) {
+        setMappedPatients([]);
+      }
+    };
+    load();
+  }, [user?.name]);
 
   const todayAppointments = [
     {
@@ -50,7 +92,7 @@ export const DoctorDashboard: React.FC<DoctorDashboardProps> = ({ onNavigate }) 
     },
     {
       label: 'Active Patients',
-      value: '127',
+      value: String(mappedPatients.length),
       icon: Users,
       color: 'teal',
     },
@@ -87,6 +129,34 @@ export const DoctorDashboard: React.FC<DoctorDashboardProps> = ({ onNavigate }) 
         <p className="mt-2 text-gray-600">
           Here's your practice overview for today
         </p>
+      </div>
+
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-8">
+        <div className="p-6 border-b border-gray-200">
+          <h2 className="text-xl font-semibold text-gray-900 flex items-center">
+            <Users className="h-5 w-5 text-teal-600 mr-2" />
+            Mapped Patients
+          </h2>
+        </div>
+        <div className="p-6">
+          {mappedPatients.length === 0 ? (
+            <div className="text-gray-600">No patients mapped yet. When a patient books you, they'll appear here.</div>
+          ) : (
+            <div className="space-y-3">
+              {mappedPatients.map((p) => (
+                <div key={`${p.id}-${p.bookedAt}`} className="flex items-center justify-between border rounded-lg p-3">
+                  <div>
+                    <div className="font-medium text-gray-900">{p.name}</div>
+                    <div className="text-sm text-gray-600">Booked: {p.bookedAt}</div>
+                  </div>
+                  <button className="inline-flex items-center px-3 py-1 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 transition-colors" onClick={() => onNavigate('appointments')}>
+                    View
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Stats Grid */}

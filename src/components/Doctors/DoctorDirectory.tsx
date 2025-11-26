@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useAuth } from '../../contexts/AuthContext';
 import { Search, MapPin, Star, Clock, Video, DollarSign } from 'lucide-react';
 
 interface Doctor {
@@ -18,11 +19,34 @@ interface Doctor {
 
 interface DoctorDirectoryProps {
   onNavigate: (view: string, data?: any) => void;
+  initialSpecialty?: string;
+  initialDiseaseName?: string;
 }
 
-export const DoctorDirectory: React.FC<DoctorDirectoryProps> = ({ onNavigate }) => {
+export const DoctorDirectory: React.FC<DoctorDirectoryProps> = ({ onNavigate, initialSpecialty, initialDiseaseName }) => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedSpecialty, setSelectedSpecialty] = useState('');
+  const [selectedSpecialty, setSelectedSpecialty] = useState(initialSpecialty || '');
+  const { user } = useAuth();
+
+  const mappedDoctorNames = useMemo(() => {
+    try {
+      const key = 'doctorPatients';
+      const raw = localStorage.getItem(key);
+      if (!raw) return new Set<string>();
+      const store = JSON.parse(raw) as Record<string, Array<{ id: string }>>;
+      if (!user?.id) return new Set<string>();
+      const names = Object.keys(store).filter(name => (store[name] || []).some(p => p.id === user.id));
+      return new Set(names);
+    } catch {
+      return new Set<string>();
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (initialSpecialty) {
+      setSelectedSpecialty(initialSpecialty);
+    }
+  }, [initialSpecialty]);
 
   const mockDoctors: Doctor[] = [
     {
@@ -92,6 +116,9 @@ export const DoctorDirectory: React.FC<DoctorDirectoryProps> = ({ onNavigate }) 
     'Pediatrics',
     'Orthopedics',
     'Neurology',
+    'Pulmonology',
+    'Gastroenterology',
+    'Infectious Disease',
   ];
 
   const filteredDoctors = mockDoctors.filter(doctor => {
@@ -102,9 +129,39 @@ export const DoctorDirectory: React.FC<DoctorDirectoryProps> = ({ onNavigate }) 
     return matchesSearch && matchesSpecialty;
   });
 
+  const generateDoctorsForSpecialty = (spec: string): Doctor[] => {
+    const avatars = [
+      'https://images.pexels.com/photos/5452201/pexels-photo-5452201.jpeg?auto=compress&cs=tinysrgb&w=200',
+      'https://images.pexels.com/photos/5735667/pexels-photo-5735667.jpeg?auto=compress&cs=tinysrgb&w=200',
+      'https://images.pexels.com/photos/3846038/pexels-photo-3846038.jpeg?auto=compress&cs=tinysrgb&w=200',
+    ];
+    const cities = ['Bengaluru, KA', 'Chennai, TN', 'Hyderabad, TS'];
+    return Array.from({ length: 3 }).map((_, i) => ({
+      id: `gen-${spec}-${i+1}`,
+      name: `Dr. ${['Aarav', 'Ishita', 'Kabir', 'Meera'][i % 4]} ${['Sharma', 'Patel', 'Rao', 'Kapoor'][i % 4]}`,
+      specialty: spec,
+      rating: 4.7 - (i * 0.1),
+      reviewCount: 50 + i * 37,
+      consultationFee: 800 + i * 150,
+      location: cities[i % cities.length],
+      avatar: avatars[i % avatars.length],
+      bio: `Experienced ${spec.toLowerCase()} specialist with strong focus on patient-centric care and evidence-based practice.`,
+      availability: ['Today', 'Tomorrow', 'This Week'],
+      experience: `${5 + i * 3}+ years`,
+      languages: ['English', 'Hindi'],
+    }));
+  };
+
   const handleBookAppointment = (doctor: Doctor) => {
     onNavigate('book-appointment', { doctor });
   };
+
+  // If user arrived from predictions (initialSpecialty provided), prefer generated specialists
+  const recommendMode = Boolean(initialSpecialty);
+  const showGenerated = (selectedSpecialty && selectedSpecialty !== 'All Specialties' && filteredDoctors.length === 0) || recommendMode;
+  const baseList = showGenerated ? generateDoctorsForSpecialty(selectedSpecialty || initialSpecialty || 'General Practice') : filteredDoctors;
+  // Do not recommend the same mock doctor repeatedly
+  const doctorsToShow = baseList.filter(d => d.name !== 'Dr. Sarah Johnson');
 
   return (
     <div className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
@@ -157,8 +214,19 @@ export const DoctorDirectory: React.FC<DoctorDirectoryProps> = ({ onNavigate }) 
       </div>
 
       {/* Results */}
+      {showGenerated && (
+        <div className="mb-4 text-sm text-blue-800 bg-blue-50 border border-blue-200 rounded-md p-3">
+          {initialDiseaseName ? (
+            <>
+              Recommended specialists for <span className="font-semibold">{initialDiseaseName}</span> ({selectedSpecialty || initialSpecialty}).
+            </>
+          ) : (
+            <>No exact matches found. Showing recommended {selectedSpecialty} specialists related to your condition.</>
+          )}
+        </div>
+      )}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {filteredDoctors.map(doctor => (
+        {doctorsToShow.map(doctor => (
           <div key={doctor.id} className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
             <div className="p-6">
               <div className="flex items-start space-x-4">
@@ -197,13 +265,18 @@ export const DoctorDirectory: React.FC<DoctorDirectoryProps> = ({ onNavigate }) 
                   </div>
                   <div className="flex items-center">
                     <DollarSign className="h-4 w-4 mr-1" />
-                    ${doctor.consultationFee}
+                    ₹{doctor.consultationFee}
                   </div>
                 </div>
                 <div className="flex items-center space-x-2">
                   {doctor.availability.includes('Today') && (
                     <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
                       Available Today
+                    </span>
+                  )}
+                  {user?.role === 'patient' && mappedDoctorNames.has(doctor.name) && (
+                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                      Your Doctor
                     </span>
                   )}
                 </div>

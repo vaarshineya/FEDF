@@ -12,12 +12,14 @@ import { AppointmentsList } from './components/Appointments/AppointmentsList';
 import { ConsultationRoom } from './components/Consultation/ConsultationRoom';
 import { PatientProfile } from './components/Profile/PatientProfile';
 import { DoctorProfile } from './components/Profile/DoctorProfile';
+import { RoleInfo } from './components/Auth/RoleInfo';
 
 function AppContent() {
   const { user, loading } = useAuth();
   const [currentView, setCurrentView] = useState('dashboard');
   const [viewData, setViewData] = useState<any>(null);
   const [showLogin, setShowLogin] = useState(true);
+  const [showRoleInfo, setShowRoleInfo] = useState(true);
 
   const handleNavigate = (view: string, data?: any) => {
     setCurrentView(view);
@@ -40,6 +42,11 @@ function AppContent() {
     );
   }
 
+  // After successful login, first show a role info screen
+  if (showRoleInfo) {
+    return <RoleInfo onProceed={() => setShowRoleInfo(false)} />;
+  }
+
   const renderCurrentView = () => {
     switch (currentView) {
       case 'dashboard':
@@ -48,10 +55,10 @@ function AppContent() {
           : <DoctorDashboard onNavigate={handleNavigate} />;
       
       case 'symptom-checker':
-        return <SymptomChecker />;
+        return <SymptomChecker onNavigate={handleNavigate} />;
       
       case 'find-doctors':
-        return <DoctorDirectory onNavigate={handleNavigate} />;
+        return <DoctorDirectory onNavigate={handleNavigate} initialSpecialty={viewData?.specialty} />;
       
       case 'book-appointment':
         return <AppointmentBooking doctor={viewData?.doctor} onNavigate={handleNavigate} />;
